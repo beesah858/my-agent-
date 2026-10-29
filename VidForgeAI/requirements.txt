@@ -7,3 +7,4 @@ numpy>=1.26
 imageio-ffmpeg>=0.4.9  # bundled static FFmpeg fallback if system ffmpeg missing
 playwright>=1.44       # built-in research browser (then: playwright install chromium)
 # optional local LLM brain: run Ollama and set provider=ollama in Settings
+pyinstaller>=6.0

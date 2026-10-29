@@ -32,8 +32,8 @@ export const VidForgeRoot: React.FC = () => (
     <Composition id="ProgressRing" component={ProgressRing} durationInFrames={100} fps={fps} width={1920} height={1080} />
     <Composition id="MapPing" component={MapPing} durationInFrames={100} fps={fps} width={1920} height={1080} />
     <Composition id="CompareSplit" component={CompareSplit} durationInFrames={100} fps={fps} width={1920} height={1080} />
-    <Composition id="HyperFrame" component={HyperFrame} durationInFrames={180} fps={fps} width={1920} height={1080} defaultProps={{layout:"statwall",title:"Your Title",items:[{type:"stat",label:"Views",value:1240,suffix:"M"}]}} />
-    <Composition id="HyperTicker" component={HyperTicker} durationInFrames={150} fps={fps} width={1920} height={1080} defaultProps={{lines:["Fact one","Fact two"]}} />
+    <Composition id="HyperFrame" component={HyperFrame} durationInFrames={180} fps={fps} width={1920} height={1080} defaultProps={{layout:"statwall",title:"Your Title",items:[{type:"stat",label:"Views",value:1240,suffix:"M"}]}} calculateMetadata={({props}) => {const p:any = props; return {...p, durationInFrames: Math.max(1, Number(p.durationInFrames) || 180)};}} />
+    <Composition id="HyperTicker" component={HyperTicker} durationInFrames={150} fps={fps} width={1920} height={1080} defaultProps={{lines:["Fact one","Fact two"]}} calculateMetadata={({props}) => {const p:any = props; return {...p, durationInFrames: Math.max(1, Number(p.durationInFrames) || 150)};}} />
     <Composition id="ForgeScene" component={ForgeScene} durationInFrames={600} fps={fps} width={1920} height={1080} />
   </>
 );

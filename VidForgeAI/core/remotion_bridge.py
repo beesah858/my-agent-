@@ -24,13 +24,37 @@ import logging
 import os
 import shutil
 import subprocess
+import sys
 import threading
 from . import config
 
 log = logging.getLogger("vidforge.remotion")
 
 ROOT = config.ROOT
-PROJ_DIR = os.path.join(ROOT, "remotion")
+
+
+def _remotion_dir() -> str:
+    """Inside VidForgeAI.exe the temp-extracted copy of remotion/src is NOT a
+    usable project (no node_modules). So when frozen, look for a real Remotion
+    project next to the exe (VidForgeAI_data/remotion) — setup_windows.bat /
+    build_exe.bat create it there. Unpackaged runs keep using ROOT/remotion."""
+    try:
+        from .runtime import is_frozen
+        if is_frozen():
+            exe_dir = os.path.dirname(sys.executable)
+            for cand in (os.path.join(exe_dir, "VidForgeAI_data", "remotion"),
+                         os.path.join(exe_dir, "remotion")):
+                if os.path.isdir(os.path.join(cand, "node_modules", "remotion")):
+                    return cand
+            # no side-by-side project -> point at the data dir anyway so
+            # available() cleanly returns False and PIL fallback kicks in
+            return os.path.join(exe_dir, "VidForgeAI_data", "remotion")
+    except Exception:
+        pass
+    return os.path.join(ROOT, "remotion")
+
+
+PROJ_DIR = _remotion_dir()
 ENTRY = os.path.join(PROJ_DIR, "src", "index.tsx")
 
 COMPOSITIONS = {
@@ -160,6 +184,10 @@ def render_clip(comp_id: str, props: dict, out_path: str, *,
     NOTE: Remotion CLI does not expose --crf/--pixel-format; for alpha clips we
     render a PNG frame sequence and mux lossless WebM/ProRes via FFmpeg.
     """
+    # data-driven duration: inject durationInFrames into props so compositions
+    # with calculateMetadata (HyperFrame/HyperTicker) size themselves exactly.
+    if duration_in_frames:
+        props = {**props, "durationInFrames": int(duration_in_frames)}
     cli = _npx_cli()
     want_alpha = transparent and (codec in (None, "vp9", "prores"))
     if codec == "prores":
@@ -172,6 +200,43 @@ def render_clip(comp_id: str, props: dict, out_path: str, *,
         out_path += default_ext
 
     if want_alpha:
+        # ---- fast native path: remotion renders VP9-with-alpha webm itself ----
+        # (one browser launch, parallel frames — thousands of times faster than
+        #  per-frame `still` calls; falls back to PNG-sequence mux if unsupported)
+        tmp_webm = out_path + ".tmp.vp9.webm"
+        cmd = cli + ["render", ENTRY, comp_id, tmp_webm,
+                     "--codec=vp9", "--pixel-format=yuva420p",
+                     "--width", str(width), "--height", str(height),
+                     "--fps", str(fps), "--props", json.dumps(props)]
+        if duration_in_frames:
+            cmd += ["--frames", f"0-{int(duration_in_frames) - 1}"]
+        try:
+            _run(cmd, tmp_webm, timeout_s, "vp9-alpha render")
+            exe = _ffmpeg_for_mux()
+            if codec == "prores":
+                conv = [exe, "-y", "-hide_banner", "-loglevel", "error", "-i", tmp_webm,
+                        "-c:v", "prores_ks", "-profile:v", "4444",
+                        "-pix_fmt", "yuva444p10le", out_path]
+            elif out_path.lower().endswith(".mp4"):
+                # opaque mp4 requested but alpha wanted -> keep webm name fix-up
+                conv = [exe, "-y", "-hide_banner", "-loglevel", "error", "-i", tmp_webm,
+                        "-c:v", "libx264", "-pix_fmt", "yuv420p", out_path]
+            else:
+                conv = [exe, "-y", "-hide_banner", "-loglevel", "error",
+                        "-i", tmp_webm, "-c:v", "copy", out_path]
+            r = subprocess.run(conv, capture_output=True, text=True, timeout=timeout_s)
+            ok = r.returncode == 0 and os.path.exists(out_path)
+            if ok:
+                os.remove(tmp_webm)
+                return out_path
+            log.warning("alpha transcode failed (%s) — using PNG-sequence path",
+                        (r.stderr or "")[-200:])
+        except Exception as e:
+            log.warning("native vp9-alpha render unavailable (%s) — PNG-sequence fallback", e)
+        finally:
+            if os.path.exists(tmp_webm):
+                os.remove(tmp_webm)
+
         # ---- frame-sequence path (true alpha, lossless) ----
         nframes = duration_in_frames or int(COMPOSITIONS.get(comp_id, ("", 3.0))[1] * fps)
         nframes = max(1, int(nframes))
@@ -180,7 +245,6 @@ def render_clip(comp_id: str, props: dict, out_path: str, *,
         shutil.rmtree(seqdir, ignore_errors=True)
         os.makedirs(seqdir, exist_ok=True)
         # one-time bundle build -> reuse for every frame (fast)
-        import time as _t
         serve_dir = os.path.join(PROJ_DIR, ".vidforge-serve")
         bundle_ok = os.path.exists(os.path.join(serve_dir, "index.html"))
         if not bundle_ok:

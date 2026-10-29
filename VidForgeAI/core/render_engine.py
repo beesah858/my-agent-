@@ -24,6 +24,17 @@ log = logging.getLogger("vidforge.render")
 
 
 def ffmpeg_bin() -> str:
+    # 0) inside VidForgeAI.exe, prefer the uniquely-named bundled ffmpeg we
+    #    ship (vidforge_ffmpeg.exe) so a broken/stale system ffmpeg on PATH
+    #    can never hijack renders.
+    try:
+        from .runtime import is_frozen, locate_bundled_ffmpeg
+        if is_frozen():
+            b = locate_bundled_ffmpeg()
+            if b:
+                return b
+    except Exception:
+        pass
     cfg_path = None
     try:
         from . import config

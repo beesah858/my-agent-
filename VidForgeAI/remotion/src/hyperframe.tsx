@@ -24,6 +24,7 @@ type HFProps = {
   textColor?: string;
   items?: HFItem[];
   scene?: Scene;
+  durationInFrames?: number; // injected by Python bridge (calculateMetadata)
 };
 
 type HFItem = {
@@ -60,10 +61,17 @@ const StatTile: React.FC<{
     fps,
     config: { damping: 14, stiffness: 120 },
   });
-  const num = Number(item.value ?? 0);
-  const shown = interpolate(pop, [0, 1], [0, num], {
-    easing: Easing.out(Easing.cubic),
-  });
+  const raw = item.value ?? 0;
+  const numeric = typeof raw === "number" && Number.isFinite(raw);
+  const num = numeric ? (raw as number) : 0;
+  // non-numeric values ("142 ly", "1.2M subscribers") render statically,
+  // numeric values animate as a count-up — prevents NaN interpolation.
+  const shown = numeric
+    ? interpolate(pop, [0, 1], [0, num], { easing: Easing.out(Easing.cubic) })
+    : 0;
+  const display = numeric
+    ? fmtNum(shown, Number.isInteger(num) ? 0 : 1)
+    : String(raw);
   const fs = Math.round(H * 0.085);
   return (
     <div
@@ -92,7 +100,7 @@ const StatTile: React.FC<{
           textShadow: `0 0 ${H * 0.03}px ${hexA(accent, 0.5)}`,
         }}
       >
-        {fmtNum(shown, Number.isInteger(num) ? 0 : 1)}
+        {display}
         {item.suffix || ""}
       </div>
       <div

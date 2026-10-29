@@ -64,12 +64,26 @@ def build_props(title: str, items: list[dict], *, layout: str = "statwall",
                 accent2: str = "#ff3d68", scene: dict | None = None,
                 **kw) -> dict:
     """Assemble validated HyperFrame props from tile dicts."""
+    import re as _re
     clean = []
     for it in items or []:
         t = dict(it)
         t["type"] = (t.get("type") or "stat").lower()
         if t["type"] not in TILE_TYPES:
             t["type"] = "stat"
+        # bar tiles need numeric `data`; coerce value/strings into a series
+        if t["type"] == "bar":
+            d = t.get("data")
+            if isinstance(d, list) and d:
+                t["data"] = [float(x) if isinstance(x, (int, float)) else
+                             (float(_re.search(r"[\d.]+", str(x)).group(0))
+                              if _re.search(r"[\d.]+", str(x)) else 0.0)
+                             for x in d]
+            elif isinstance(t.get("value"), (int, float)):
+                t["data"] = [float(t["value"]), float(t.get("max") or max(float(t["value"]), 1))]
+            else:
+                m = _re.findall(r"[\d.]+", str(t.get("value") or ""))
+                t["data"] = [float(x) for x in m] if m else [1]
         clean.append(t)
     return {"layout": layout if layout in LAYOUTS else "statwall",
             "title": title, "subtitle": subtitle, "accent": accent,
@@ -181,13 +195,21 @@ def _fallback_card(workdir, title, items, *, out, W, H, dur_s, fps, transparent)
     """No-Node fallback: animated stat/list card via the built-in PIL engine."""
     from . import motion_graphics as mg
     first_stat = next((it for it in items if it.get("type") == "stat"), None)
+    # keep the caller's requested container/extension (remotion_bridge normalises
+    # .mp4 -> .mov internally, so `out` may already differ — honour its suffix)
+    base, ext = os.path.splitext(out)
+    if ext.lower() not in (".mp4", ".mov", ".webm", ".mkv"):
+        ext = ".mov"
+    target = base + ext
     if first_stat:
-        return mg.stat_counter(workdir, value=float(first_stat.get("value") or 0),
+        import re as _re
+        _m = _re.search(r"\d[\d,]*\.?\d*", str(first_stat.get("value") or "0"))
+        _val = float(_m.group(0).replace(",", "")) if _m else 0.0
+        return mg.stat_counter(workdir, value=_val,
                                label=str(first_stat.get("label") or title)[:40],
-                               W=W, H=H, dur_s=dur_s, fps=fps,
-                               out=out.rsplit(".", 1)[0] + ".mov")
+                               W=W, H=H, dur_s=dur_s, fps=fps, out=target)
     return mg.title_reveal(workdir, title=title, sub="", W=W, H=H,
-                           dur_s=dur_s, fps=fps, out=out.rsplit(".", 1)[0] + ".mov")
+                           dur_s=dur_s, fps=fps, out=target)
 
 
 def status() -> dict:
