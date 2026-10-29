@@ -1,0 +1,34 @@
+name: Build Windows EXE
+
+on:
+  workflow_dispatch:
+  release:
+    types: [created]
+
+jobs:
+  build-exe:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Python dependencies
+        run: pip install -r VidForgeAI/requirements.txt pyinstaller
+
+      - name: Install Playwright Chromium
+        run: playwright install chromium
+
+      - name: Install Remotion node deps (motion graphics engine)
+        working-directory: VidForgeAI/remotion
+        run: npm install --no-audit --no-fund
+
+      - name: Build .exe with PyInstaller
+        run: pyinstaller --onefile --name VidForgeAI --windowed --collect-all edge_tts --collect-all pyttsx3 VidForgeAI/vidforge.py
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: VidForgeAI-windows-exe
+          path: dist/VidForgeAI.exe
