@@ -24,13 +24,37 @@ import logging
 import os
 import shutil
 import subprocess
+import sys
 import threading
 from . import config
 
 log = logging.getLogger("vidforge.remotion")
 
 ROOT = config.ROOT
-PROJ_DIR = os.path.join(ROOT, "remotion")
+
+
+def _remotion_dir() -> str:
+    """Inside VidForgeAI.exe the temp-extracted copy of remotion/src is NOT a
+    usable project (no node_modules). So when frozen, look for a real Remotion
+    project next to the exe (VidForgeAI_data/remotion) — setup_windows.bat /
+    build_exe.bat create it there. Unpackaged runs keep using ROOT/remotion."""
+    try:
+        from .runtime import is_frozen
+        if is_frozen():
+            exe_dir = os.path.dirname(sys.executable)
+            for cand in (os.path.join(exe_dir, "VidForgeAI_data", "remotion"),
+                         os.path.join(exe_dir, "remotion")):
+                if os.path.isdir(os.path.join(cand, "node_modules", "remotion")):
+                    return cand
+            # no side-by-side project -> point at the data dir anyway so
+            # available() cleanly returns False and PIL fallback kicks in
+            return os.path.join(exe_dir, "VidForgeAI_data", "remotion")
+    except Exception:
+        pass
+    return os.path.join(ROOT, "remotion")
+
+
+PROJ_DIR = _remotion_dir()
 ENTRY = os.path.join(PROJ_DIR, "src", "index.tsx")
 
 COMPOSITIONS = {

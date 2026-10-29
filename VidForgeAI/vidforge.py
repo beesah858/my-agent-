@@ -21,6 +21,47 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 
+def _startup_guard():
+    """VidForgeAI.exe is built with --windowed (no console). If startup ever
+    stalls or crashes we used to see nothing at all. This writes every fatal
+    error to %APPDATA%/VidForgeAI/startup_error.log and shows a dialog so the
+    user knows what happened instead of staring at 'loading' forever."""
+    if not getattr(sys, "frozen", False):
+        return
+    import traceback
+    from core import config
+
+    def hook(exc_type, exc, tb):
+        msg = "".join(traceback.format_exception(exc_type, exc, tb))
+        try:
+            with open(os.path.join(config.DATA_DIR, "startup_error.log"),
+                      "w", encoding="utf-8") as f:
+                f.write(msg)
+        except Exception:
+            pass
+        try:
+            import tkinter as tk
+            from tkinter import messagebox
+            r = tk.Tk(); r.withdraw()
+            messagebox.showerror("VidForge AI — startup error",
+                                 msg[-1500:] + "\n\n(full log: %s)" %
+                                 os.path.join(config.DATA_DIR, "startup_error.log"))
+            r.destroy()
+        except Exception:
+            pass
+
+    sys.excepthook = hook
+    try:
+        # default action when double-clicked with no args -> open Studio
+        if len(sys.argv) == 1:
+            sys.argv[1:1] = ["gui"]
+        # one-time sanity: make sure bundled ffmpeg got extracted correctly
+        from core.runtime import locate_bundled_ffmpeg  # noqa: F401
+    except Exception:
+        hook(*sys.exc_info())
+        raise
+
+
 def main():
     ap = argparse.ArgumentParser(prog="vidforge", description="VidForge AI — local AI video factory")
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -175,4 +216,5 @@ def main():
 
 
 if __name__ == "__main__":
+    _startup_guard()
     main()

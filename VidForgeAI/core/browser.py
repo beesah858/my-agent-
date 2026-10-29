@@ -25,8 +25,8 @@ UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 VidForgeAI/2.
 
 def _has_playwright() -> bool:
     try:
-        import playwright.sync_api  # noqa
-        return True
+        from .runtime import playwright_available
+        return playwright_available()
     except Exception:
         return False
 
@@ -44,7 +44,9 @@ class ForgeBrowser:
     # ------------------------------------------------------------ lifecycle
     def start(self):
         if not _has_playwright():
-            raise RuntimeError("playwright not installed")
+            raise RuntimeError(
+                "Research browser unavailable: run `python -m playwright install chromium` "
+                "(inside VidForgeAI.exe this feature is optional - stock APIs cover sourcing)")
         from playwright.sync_api import sync_playwright
         self._pw = sync_playwright().start()
         exe = config.CFG.get("chrome_path") or None

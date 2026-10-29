@@ -5,7 +5,7 @@ import sys
 
 APP_NAME = "VidForge AI"
 APP_TAGLINE = "AI Director · Edit-ready video factory"
-VERSION = "2.1.0"
+VERSION = "2.2.2"
 
 
 def _appdata() -> str:
