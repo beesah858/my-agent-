@@ -1,0 +1,9 @@
+# VidForge AI — runtime dependencies
+requests>=2.31
+edge-tts>=7.0          # fixed WordBoundary handling + retry/fallback in core/tts_engine.py
+pyttsx3>=2.90          # fully offline local voices (SAPI5 / NSSpeech / espeak)
+Pillow>=10.0           # caption previews + motion-graphics frame generation
+numpy>=1.26
+imageio-ffmpeg>=0.4.9  # bundled static FFmpeg fallback if system ffmpeg missing
+playwright>=1.44       # built-in research browser (then: playwright install chromium)
+# optional local LLM brain: run Ollama and set provider=ollama in Settings

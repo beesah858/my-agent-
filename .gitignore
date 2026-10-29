@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# Node / Remotion (rebuilt on user machine via setup script)
+VidForgeAI/remotion/node_modules/
+VidForgeAI/remotion/build/
+VidForgeAI/remotion/out/
+
+# Build artifacts
+dist/
+build/
+*.spec
+
+# Project outputs & caches (generated at runtime)
+VidForgeAI/projects/
+VidForgeAI/data/
+assets/
+!VidForgeAI/assets/
+VidForgeAI/assets/**
+!VidForgeAI/assets/.gitkeep
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
