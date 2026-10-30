@@ -30,11 +30,37 @@ def _font(size, bold=True):
 
 
 def _frames_to_mov(frames_dir: str, out_mov: str, fps: int, dur_s: float):
+    """Encode PIL frames to the requested container.
+
+    ProRes 4444 only lives in .mov/.mkv — if the caller asked for .mp4/.webm
+    (e.g. HyperFrame fallback cards used directly as b-roll) we encode VP9/AV1
+    with alpha instead, which every downstream filter chain accepts too."""
     exe = ffmpeg_bin()
-    subprocess.run([exe, "-y", "-hide_banner", "-loglevel", "error",
-                    "-framerate", str(fps), "-i", os.path.join(frames_dir, "f_%04d.png"),
-                    "-c:v", "prores_ks", "-profile:v", "4", "-pix_fmt", "yuva444p10le",
-                    "-t", f"{dur_s:.3f}", out_mov], check=True)
+    ext = os.path.splitext(out_mov)[1].lower()
+    cmd = [exe, "-y", "-hide_banner", "-loglevel", "error",
+           "-framerate", str(fps), "-i", os.path.join(frames_dir, "f_%04d.png")]
+    if ext == ".webm":
+        cmd += ["-c:v", "libvpx-vp9", "-pix_fmt", "yuva420p", "-b:v", "0",
+                "-crf", "30", "-an"]
+    elif ext == ".mp4":
+        # keep alpha when source frames have it (prores-free mp4s can't store
+        # alpha reliably -> flatten onto transparent-safe yuva via mov first)
+        tmp = out_mov + ".tmp.mov"
+        subprocess.run(cmd + ["-c:v", "prores_ks", "-profile:v", "4",
+                              "-pix_fmt", "yuva444p10le", "-t", f"{dur_s:.3f}", tmp],
+                       check=True)
+        subprocess.run([exe, "-y", "-hide_banner", "-loglevel", "error", "-i", tmp,
+                        "-c:v", "libx264", "-pix_fmt", "yuv420p", "-crf", "18",
+                        "-preset", "veryfast", out_mov], check=True)
+        try:
+            os.remove(tmp)
+        except OSError:
+            pass
+        return out_mov
+    else:  # .mov / .mkv — native transparent ProRes 4444
+        cmd += ["-c:v", "prores_ks", "-profile:v", "4", "-pix_fmt", "yuva444p10le"]
+    cmd += ["-t", f"{dur_s:.3f}", out_mov]
+    subprocess.run(cmd, check=True)
     return out_mov
 
 

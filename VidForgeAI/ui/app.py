@@ -37,6 +37,7 @@ class App(tk.Tk):
         self.nb = ttk.Notebook(self)
         self.nb.pack(fill="both", expand=1, padx=10, pady=(0, 10))
         for title, build in [("🎬  AI Create", self.tab_create),
+                             ("⚡  Forge Studio", self.tab_forge),
                              ("🧠  Timeline Editor", self.tab_timeline),
                              ("💬  Captions", self.tab_captions),
                              ("🌐  Media Browser", self.tab_media),
@@ -262,6 +263,262 @@ class App(tk.Tk):
         self._prog["value"] = p * 100
         self._logline(m)
         self.set_status(m, p)
+
+    # ------------------------------------------------------------ FORGE STUDIO tab
+    def tab_forge(self, fr):
+        """⚡ Forge Studio — full-control AI short/long video factory (core.forge)."""
+        from core import forge as _forge
+        pad = dict(padx=14, pady=5)
+        hdr = ttk.Frame(fr); hdr.pack(fill="x", **pad)
+        tk.Label(hdr, text="⚡  FORGE STUDIO — full-control AI video builder "
+                           "(short 9:16 · long 16:9)", fg=ACC2, bg=BG,
+                 font=(FONT, 13, "bold")).pack(side="left")
+        self._forge_cap = tk.Label(hdr, text="", fg=MUT, bg=BG, font=(FONT, 9))
+        self._forge_cap.pack(side="right")
+        try:
+            st = _forge.forge_status()
+            self._forge_cap.config(
+                text=f"Remotion {'✓' if st['remotion_ready'] else 'PIL-fallback'} · "
+                     f"{st['caption_presets']} caption presets · "
+                     f"{st['providers_enabled']} stock providers · LLM: {st['llm']}")
+        except Exception:
+            pass
+
+        body = ttk.Frame(fr); body.pack(fill="both", expand=True)
+        left = ttk.Frame(body); left.pack(side="left", fill="both", expand=True, padx=(14, 6))
+        right = ttk.Frame(body); right.pack(side="right", fill="y", padx=(6, 14))
+
+        # --- idea / script -------------------------------------------------
+        tk.Label(left, text="Video idea / topic   —   ya apna professional script paste karo (tab switch neeche)",
+                 fg=MUT, bg=BG).pack(anchor="w")
+        self.fg_idea = tk.Entry(left, bg=BG2, fg=TXT, insertbackground=TXT,
+                                relief="flat", font=(FONT, 12))
+        self.fg_idea.pack(fill="x", pady=(2, 4))
+        self.fg_mode = tk.StringVar(value="idea")     # idea | script
+        seg = ttk.Frame(left); seg.pack(anchor="w")
+        for val, lbl in [("idea", "💡 Idea → AI writes script"),
+                         ("script", "📝 Use my pasted script")]:
+            tk.Radiobutton(seg, text=lbl, variable=self.fg_mode, value=val,
+                           bg=BG, fg=TXT, selectcolor=BG2, activebackground=BG,
+                           activeforeground=TXT, command=self._fg_mode_toggle,
+                           font=(FONT, 9)).pack(side="left", padx=(0, 14))
+        self.fg_script = tk.Text(left, height=8, bg="#0a0e14", fg="#cdd9e5",
+                                 insertbackground=TXT, relief="flat",
+                                 font=("Consolas", 10), wrap="word")
+        tk.Label(left, text="Script format:  ## Scene 1 … VO: narration … Visual: b-roll cue   "
+                            "(bare paragraphs bhi chalte hain)",
+                 fg=MUT, bg=BG, font=(FONT, 8)).pack(anchor="w")
+
+        # --- control grid --------------------------------------------------
+        g = ttk.Frame(left); g.pack(fill="x", pady=6)
+        lab = lambda r, c, t: tk.Label(g, text=t, fg=MUT, bg=BG, font=(FONT, 9)).grid(
+            row=r, column=c, sticky="w", padx=(0, 10))
+        def combo(vals, dflt, w=13):
+            cb = ttk.Combobox(g, values=vals, width=w, state="readonly")
+            cb.set(dflt)
+            return cb
+
+        lab(0, 0, "Format"); self.fg_fmt = combo(["short (9:16 vertical)", "long (16:9 wide)"],
+                                                 "long (16:9 wide)", 16); self.fg_fmt.grid(row=1, column=0)
+        lab(0, 1, "Length min"); self.fg_min = tk.Spinbox(g, from_=0.2, to=20, increment=0.5,
+                                                          width=6, bg=BG2, fg=TXT,
+                                                          buttonbackground=CARD, relief="flat",
+                                                          font=(FONT, 11)); self.fg_min.delete(0, "end")
+        self.fg_min.insert(0, "3"); self.fg_min.grid(row=1, column=1, sticky="w")
+        lab(0, 2, "Style"); self.fg_style = combo(
+            ["documentary", "energetic shorts", "explainer", "storytelling",
+             "product ad", "top-10 list", "news recap", "reaction"], "documentary", 15)
+        self.fg_style.grid(row=1, column=2, sticky="w")
+        lab(0, 3, "Visual mode"); self.fg_vmode = combo(
+            ["auto", "stock", "hyperframe", "mixed (stock+HUD)", "image (Ken-Burns)"],
+            "auto", 17); self.fg_vmode.grid(row=1, column=3, sticky="w")
+
+        lab(2, 0, "Narrator voice"); self.fg_voice = combo([
+            "en-US-AriaNeural", "en-US-GuyNeural", "en-GB-SoniaNeural",
+            "en-AU-NatashaNeural", "en-US-JennyNeural", "ur-PK-IraNeural",
+            "hi-IN-SwaraNeural", "es-MX-DaliaNeural"], config.CFG["tts_voice"], 18)
+        self.fg_voice.grid(row=3, column=0, columnspan=2, sticky="w", pady=(10, 0))
+        lab(2, 2, "Rate"); self.fg_rate = combo(
+            ["-20%", "-10%", "+0%", "+8%", "+15%", "+25%"], "+8%"); self.fg_rate.grid(row=3, column=2, sticky="w", pady=(10, 0))
+        lab(2, 3, "Pitch"); self.fg_pitch = combo(
+            ["-20Hz", "-10Hz", "+0Hz", "+10Hz", "+20Hz"], "+0Hz"); self.fg_pitch.grid(row=3, column=3, sticky="w", pady=(10, 0))
+
+        fams = sorted({p.family for p in captions.LIBRARY})
+        lab(4, 0, "Caption preset (family)"); self.fg_capfam = combo(fams, "Pop Bounce", 18)
+        self.fg_capfam.grid(row=5, column=0, columnspan=2, sticky="w", pady=(10, 0))
+        subs = [p.id for p in captions.LIBRARY if p.family == "Pop Bounce"]
+        lab(4, 2, "Exact template"); self.fg_cappreset = combo(subs, subs[0], 22)
+        self.fg_cappreset.grid(row=5, column=2, columnspan=2, sticky="w", pady=(10, 0))
+        self.fg_capfam.bind("<<ComboboxSelected>>", self._fg_fill_presets)
+
+        lab(6, 0, "Music bed volume"); mf = ttk.Frame(g); mf.grid(row=7, column=0, columnspan=2, sticky="w")
+        self.fg_musicvol = tk.Scale(mf, from_=0, to=40, orient="horizontal", length=110,
+                                    bg=BG, fg=TXT, troughcolor=BG2, highlightthickness=0,
+                                    showvalue=True)
+        self.fg_musicvol.set(16); self.fg_musicvol.pack(side="left")
+        self.fg_music = tk.StringVar()
+        me = tk.Entry(mf, textvariable=self.fg_music, width=14, bg=BG2, fg=TXT,
+                      insertbackground=TXT, relief="flat"); me.pack(side="left", padx=4)
+        ttk.Button(mf, text="…", width=3, style="Ghost.TButton",
+                   command=lambda: self.fg_music.set(
+                       filedialog.askopenfilename(
+                           filetypes=[("Audio", "*.mp3 *.wav *.m4a *.ogg")]) or "")).pack(side="left")
+        lab(6, 2, "Transition"); self.fg_trans = combo(
+            ["cut", "fade", "slide", "wipe", "glitch"], "fade"); self.fg_trans.grid(row=7, column=2, sticky="w")
+        lab(6, 3, "Watermark (optional)"); self.fg_wm = tk.Entry(g, width=16, bg=BG2, fg=TXT,
+                                                                 insertbackground=TXT, relief="flat")
+        self.fg_wm.grid(row=7, column=3, sticky="w")
+
+        lab(8, 0, "Hook line (extra opening scene)"); self.fg_hook = tk.Entry(
+            g, width=30, bg=BG2, fg=TXT, insertbackground=TXT, relief="flat")
+        self.fg_hook.grid(row=9, column=0, columnspan=2, sticky="w", pady=(10, 0))
+        lab(8, 2, "CTA / outro line"); self.fg_cta = tk.Entry(
+            g, width=30, bg=BG2, fg=TXT, insertbackground=TXT, relief="flat")
+        self.fg_cta.grid(row=9, column=2, columnspan=2, sticky="w", pady=(10, 0))
+
+        chkrow = ttk.Frame(left); chkrow.pack(fill="x", pady=4)
+        self.fg_ken = tk.BooleanVar(value=True)
+        self.fg_lufs = tk.BooleanVar(value=True)
+        self.fg_chap = tk.BooleanVar(value=True)
+        self.fg_pbar = tk.BooleanVar(value=False)
+        self.fg_browser = tk.BooleanVar(value=bool(config.CFG.get("browser_fallback_enabled", False)))
+        for var, lbl in [(self.fg_ken, "Ken-Burns on stills"), (self.fg_lufs, "-14 LUFS master"),
+                         (self.fg_chap, "Chapter markers"), (self.fg_pbar, "Force progress bar"),
+                         (self.fg_browser, "Browser real-footage fallback")]:
+            tk.Checkbutton(chkrow, text=lbl, variable=var, bg=BG, fg=TXT, selectcolor=BG2,
+                           activebackground=BG, activeforeground=TXT,
+                           font=(FONT, 9)).pack(side="left", padx=(0, 12))
+
+        ctl = ttk.Frame(left); ctl.pack(fill="x", pady=6)
+        ttk.Button(ctl, text="⚡  FORGE VIDEO", command=self.on_forge).pack(side="left")
+        ttk.Button(ctl, text="Preview scenes", style="Ghost.TButton",
+                   command=self.on_forge_preview).pack(side="left", padx=8)
+        ttk.Button(ctl, text="⏹ Cancel", style="Ghost.TButton",
+                   command=self.cancel.set).pack(side="left")
+        self.fg_prog = ttk.Progressbar(ctl, length=200, mode="determinate"); self.fg_prog.pack(side="right")
+
+        # --- right side: log + output buttons -------------------------------
+        tk.Label(right, text="Forge log", fg=MUT, bg=BG).pack(anchor="w")
+        self.fg_log = tk.Text(right, width=52, bg="#0a0e14", fg="#ffd97a",
+                              insertbackground=TXT, relief="flat", font=("Consolas", 10),
+                              state="disabled")
+        self.fg_log.pack(fill="both", expand=True, pady=4)
+        brow = ttk.Frame(right); brow.pack(fill="x")
+        ttk.Button(brow, text="📂 Open output folder", style="Ghost.TButton",
+                   command=self._fg_open_out).pack(side="left")
+        ttk.Button(brow, text="▶ Play final.mp4", style="Ghost.TButton",
+                   command=self._fg_play).pack(side="left", padx=6)
+        self._fg_last_dir = None
+
+    def _fg_mode_toggle(self):
+        if self.fg_mode.get() == "script":
+            self.fg_script.pack(fill="x", pady=4)
+        else:
+            self.fg_script.pack_forget()
+
+    def _fg_fill_presets(self, *_):
+        fam = self.fg_capfam.get()
+        ids = [p.id for p in captions.LIBRARY if p.family == fam]
+        self.fg_cappreset["values"] = ids
+        if ids:
+            self.fg_cappreset.set(ids[0])
+
+    def _fg_write_log(self, s):
+        self.fg_log.config(state="normal")
+        self.fg_log.insert("end", s + "\n"); self.fg_log.see("end")
+        self.fg_log.config(state="disabled")
+
+    def _fg_common_kwargs(self):
+        from core import forge as _forge
+        fmt = "short" if self.fg_fmt.get().startswith("short") else "long"
+        return dict(fmt=fmt,
+                    target_minutes=float(self.fg_min.get()),
+                    style=self.fg_style.get(),
+                    voice=self.fg_voice.get(),
+                    rate=self.fg_rate.get(), pitch=self.fg_pitch.get(),
+                    visual_mode=("mixed" if self.fg_vmode.get().startswith("mixed")
+                                 else "image" if self.fg_vmode.get().startswith("image")
+                                 else self.fg_vmode.get()),
+                    caption_preset=self.fg_cappreset.get() or None,
+                    music_path=self.fg_music.get() or None,
+                    music_volume=self.fg_musicvol.get() / 100.0,
+                    hook=self.fg_hook.get(), cta=self.fg_cta.get(),
+                    transitions=self.fg_trans.get(),
+                    ken_burns=self.fg_ken.get(), lufs=self.fg_lufs.get(),
+                    chapters=self.fg_chap.get(),
+                    progress_bar=(True if self.fg_pbar.get() else None),
+                    watermark=self.fg_wm.get(),
+                    use_browser=(True if self.fg_browser.get() else False))
+
+    def on_forge_preview(self):
+        idea = self.fg_idea.get().strip()
+        txt = self.fg_script.get("1.0", "end").strip() if self.fg_mode.get() == "script" else ""
+        if not idea and not txt:
+            return messagebox.showwarning("Forge Studio", "Idea likho ya script paste karo.")
+        def work():
+            from core import forge as _forge
+            if txt:
+                title, scenes = _forge.script_to_scenes(txt, idea=idea)
+            else:
+                sc = director.write_script(idea, int(float(self.fg_min.get()) * 60),
+                                           self.fg_fmt.get().split()[0], self.fg_style.get())
+                title, scenes = sc["title"], sc["scenes"]
+            return {"title": title, "scenes": scenes}
+        def done(r, e):
+            if e:
+                return self._fg_write_log("ERROR: " + str(e))
+            self._fg_write_log(f"— preview: “{r['title']}” ({len(r['scenes'])} scenes)")
+            for i, s in enumerate(r["scenes"]):
+                self._fg_write_log(f"  [{i+1}] VO: {s['narration'][:90]}")
+                self._fg_write_log(f"      VISUAL: {s.get('visual_query','')}")
+        self.run_bg(work, done)
+
+    def on_forge(self):
+        from core import forge as _forge
+        idea = self.fg_idea.get().strip()
+        txt = self.fg_script.get("1.0", "end").strip() if self.fg_mode.get() == "script" else ""
+        if not idea and not txt:
+            return messagebox.showwarning("Forge Studio", "Idea likho ya script paste karo.")
+        kw = self._fg_common_kwargs()
+        self.cancel.clear()
+        self.fg_log.config(state="normal"); self.fg_log.delete("1.0", "end"); self.fg_log.config(state="disabled")
+        self._fg_write_log(f"⚡ FORGE START · {kw['fmt']} · mode={kw['visual_mode']} · "
+                           f"captions={kw['caption_preset']}")
+        def work():
+            return _forge.forge_create(idea or txt.splitlines()[0][:60],
+                                       script_text=txt or None,
+                                       progress=lambda p, m: self.ui(self._fg_progress, p, m))
+        def done(r, e):
+            self.fg_prog["value"] = 0
+            if e:
+                self._fg_write_log("❌ " + str(e))
+                return messagebox.showerror("Forge failed", str(e)[:900])
+            self._fg_last_dir = r.get("project_dir")
+            self._last_out = r["output"]
+            self._fg_write_log(f"✅ DONE → {r['output']}")
+            self._fg_write_log(f"   {r['duration_s']}s · SRT: {r.get('captions_srt','')}")
+            if messagebox.askyesno("Forge Studio", "Video ready!\nOpen the folder?"):
+                self._fg_open_out()
+        self.run_bg(work, done)
+
+    def _fg_progress(self, p, m):
+        self.fg_prog["value"] = p * 100
+        self._fg_write_log(m)
+
+    def _fg_open_out(self):
+        d = self._fg_last_dir
+        if d and os.path.exists(d):
+            subprocess.Popen(["explorer", d] if sys.platform.startswith("win")
+                             else ["xdg-open", d])
+
+    def _fg_play(self):
+        d = self._fg_last_dir
+        f = os.path.join(d, "final.mp4") if d else ""
+        if f and os.path.exists(f):
+            if sys.platform.startswith("win"):
+                os.startfile(f)  # noqa: S606 — default player
+            else:
+                subprocess.Popen(["xdg-open", f])
 
     # ------------------------------------------------------------ TIMELINE tab
     def tab_timeline(self, fr):
