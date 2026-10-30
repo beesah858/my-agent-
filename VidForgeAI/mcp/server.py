@@ -21,7 +21,7 @@ import sys
 # allow `python mcp/server.py`
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from core import (browser, captions, config, director, media_search,
+from core import (browser, captions, config, director, forge, media_search,
                   motion_graphics as mg, render_engine, tts_engine)
 
 SERVER_INFO = {"name": "vidforge-studio", "version": config.VERSION}
@@ -49,6 +49,20 @@ TOOLS = {
                                     music_path=music_path, style=style,
                                     use_browser=use_browser),
         desc="FULL auto pipeline: idea -> researched script -> synced narration+footage -> captions -> rendered final.mp4 + editable project.json. format: short|long; use_browser=true to allow built-in browser real-footage capture (requires browser_fallback_enabled in config)"),
+    "forge_create": dict(
+        fn=lambda idea, fmt="short", **kw: forge.forge_create(idea, fmt=fmt, **kw),
+        desc="⚡ FORGE STUDIO — full-control AI video builder. Args: idea; fmt short|long; "
+             "target_minutes; style; voice/rate/pitch; caption_preset (any of 384 ids); "
+             "music_path & music_volume; visual_mode auto|stock|hyperframe|mixed|image; "
+             "script_text (user-pasted pro script with ## Scene/VO:/Visual: cues — bypasses AI writer); "
+             "hook & cta lines; transitions cut|fade|slide|wipe|glitch; ken_burns; lufs; chapters; "
+             "progress_bar; watermark; fps; crf; project_dir. Returns final.mp4 path + meta."),
+    "forge_import_script": dict(
+        fn=lambda text, idea="", fmt="long": {"title": forge.script_to_scenes(text, idea=idea, fmt=fmt)[0],
+                                              "scenes": forge.script_to_scenes(text, idea=idea, fmt=fmt)[1]},
+        desc="Convert a plain-text/markdown script into VidForge scenes (no rendering)."),
+    "forge_status": dict(fn=forge.forge_status,
+                         desc="Capability snapshot: remotion_ready, providers, caption presets, LLM."),
     "write_script": dict(fn=director.write_script,
                          desc="Write scene-by-scene narration script with per-scene visual queries"),
     # ---- speech
