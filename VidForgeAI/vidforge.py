@@ -125,6 +125,31 @@ def main():
 
     sub.add_parser("motion-status", help="check Remotion/Node engine availability")
 
+    fg = sub.add_parser("forge", help="⚡ Forge Studio: full-control AI short/long video "
+                                      "(idea OR --script file, per-scene sync, 384 caption presets)")
+    fg.add_argument("idea", nargs="?", default="")
+    fg.add_argument("--short", action="store_true"); fg.add_argument("--long", action="store_true")
+    fg.add_argument("-m", "--minutes", type=float, default=None)
+    fg.add_argument("--voice", default=None); fg.add_argument("--rate", default=None)
+    fg.add_argument("--pitch", default=None); fg.add_argument("--preset", default=None)
+    fg.add_argument("--music", default=None); fg.add_argument("--music-vol", type=float, default=0.16)
+    fg.add_argument("--style", default="documentary")
+    fg.add_argument("--visual-mode", default="auto",
+                    choices=["auto", "stock", "hyperframe", "mixed", "image"])
+    fg.add_argument("--script", default=None, help="path to a .txt/.md script (## Scene blocks / VO: cues)")
+    fg.add_argument("--hook", default=""); fg.add_argument("--cta", default="")
+    fg.add_argument("--transitions", default="fade",
+                    choices=["cut", "fade", "slide", "wipe", "glitch"])
+    fg.add_argument("--no-ken-burns", action="store_true")
+    fg.add_argument("--no-lufs", action="store_true")
+    fg.add_argument("--no-chapters", action="store_true")
+    fg.add_argument("--progress-bar", action="store_true")
+    fg.add_argument("--watermark", default="")
+    fg.add_argument("--fps", type=int, default=30)
+    fg.add_argument("--crf", type=int, default=None)
+    fg.add_argument("--no-browser", action="store_true")
+    fg.add_argument("-o", "--out", default=None, help="project folder (default projects/<id>_<topic>)")
+
     a = ap.parse_args()
 
     if a.cmd == "generate":
@@ -135,6 +160,29 @@ def main():
                                        music_path=a.music, style=a.style,
                                        use_browser=(False if a.no_browser else None),
                                        progress=lambda pct, msg: print(f"[{pct*100:3.0f}%] {msg}"))
+        print(json.dumps(meta, indent=2, default=str))
+    elif a.cmd == "forge":
+        from core import forge as _forge
+        fmt = "short" if a.short else "long"
+        script_text = None
+        if a.script:
+            with open(a.script, encoding="utf-8") as f:
+                script_text = f.read()
+        if not (a.idea or script_text):
+            ap.error("forge: give an idea OR --script FILE")
+        meta = _forge.forge_create(
+            a.idea or os.path.basename(a.script), fmt=fmt, target_minutes=a.minutes,
+            style=a.style, voice=a.voice, rate=a.rate, pitch=a.pitch,
+            caption_preset=a.preset, music_path=a.music, music_volume=a.music_vol,
+            visual_mode=a.visual_mode, script_text=script_text,
+            hook=a.hook, cta=a.cta, transitions=a.transitions,
+            ken_burns=not a.no_ken_burns, lufs=not a.no_lufs,
+            chapters=not a.no_chapters,
+            progress_bar=(True if a.progress_bar else None),
+            watermark=a.watermark, fps=a.fps, crf=a.crf,
+            use_browser=(False if a.no_browser else None),
+            project_dir=a.out,
+            progress=lambda pct, msg: print(f"[{pct*100:3.0f}%] {msg}"))
         print(json.dumps(meta, indent=2, default=str))
     elif a.cmd == "tts":
         from core import tts_engine
